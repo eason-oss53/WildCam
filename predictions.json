@@ -1,0 +1,41 @@
+{
+ "info": {
+  "format_version": "20261015"
+ },
+ "predictions": [
+  {
+   "filepath": "C:/WildlifeCam/images/arcticFox.jpg",
+   "country": "USA",
+   "admin1_region": "IL",
+   "detections": [
+    {
+     "category": "1",
+     "label": "animal",
+     "conf": 0.9154,
+     "bbox": [
+      0.2241,
+      0.0569,
+      0.6179,
+      0.894
+     ],
+     "raw_classifications": {
+      "classes": [
+       "78761f5e-64a3-46eb-b4f1-c966cc1ce630;mammalia;carnivora;canidae;vulpes;;vulpes species",
+       "f33491f9-621d-4870-8276-4f16d3d0b898;mammalia;carnivora;canidae;vulpes;velox;swift fox"
+      ],
+      "scores": [
+       0.2512,
+       0.2499
+      ]
+     },
+     "processed_classification": {
+      "class": "1f689929-883d-4dae-958c-3d57ab5b6c16;;;;;;animal",
+      "score": 0.9154,
+      "source": "detector"
+     }
+    }
+   ],
+   "model_version": "4.0.3a"
+  }
+ ]
+}

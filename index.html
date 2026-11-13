@@ -1,0 +1,766 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wildlife Monitor</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+:root {
+    --bg: #0e1715;
+    --panel: #182421;
+    --green: #55d88a;
+    --text: #f1f6f2;
+    --muted: #a8b8af;
+    --border: #34443e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Arial, sans-serif;
+}
+
+header {
+    padding: 30px 4%;
+    background: linear-gradient(120deg, #163a2c, #13231f);
+}
+
+header h1 {
+    font-size: 38px;
+    margin: 0;
+    color: #a4f4c1;
+}
+
+header p { color: #c5d6ca; }
+
+main {
+    max-width: 1500px;
+    margin: auto;
+    padding: 24px 3%;
+}
+
+.toolbar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+input, select, button {
+    padding: 11px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #111d19;
+    color: white;
+    font-size: 15px;
+}
+
+input { flex: 1; min-width: 200px; }
+
+button {
+    background: #207849;
+    cursor: pointer;
+}
+
+button:hover { filter: brightness(1.2); }
+
+#status {
+    color: var(--muted);
+    align-self: center;
+    font-size: 13px;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.card, .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    padding: 18px;
+}
+
+.metric {
+    font-size: 30px;
+    color: var(--green);
+    font-weight: bold;
+}
+
+.label { color: var(--muted); }
+
+.layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.panel h2 {
+    font-size: 19px;
+    margin-top: 0;
+}
+
+.wide { grid-column: 1 / -1; }
+
+#map {
+    height: 350px;
+    border-radius: 12px;
+}
+
+.chart {
+    width: 100%;
+    height: 280px;
+}
+
+.species-list {
+    display: grid;
+    gap: 12px;
+}
+
+.species-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 5px;
+}
+
+.bar {
+    height: 8px;
+    background: #2a3932;
+    border-radius: 20px;
+    grid-column: 1 / -1;
+    overflow: hidden;
+}
+
+.bar span {
+    display: block;
+    height: 100%;
+    background: var(--green);
+}
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+}
+
+.animal {
+    background: #111d19;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.animal img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    background: #27352e;
+}
+
+.info { padding: 12px; }
+
+.info h3 { margin: 0; }
+
+small { color: var(--muted); }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+th { color: var(--muted); }
+
+footer {
+    text-align: center;
+    padding: 25px;
+    color: var(--muted);
+}
+
+@media(max-width:800px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .layout { grid-template-columns: 1fr; }
+    .wide { grid-column: auto; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Wildlife Monitor</h1>
+    <p>AI-powered wildlife detection and analysis</p>
+</header>
+
+<main>
+
+<div class="toolbar">
+    <input id="search" placeholder="Search species...">
+
+    <select id="period">
+        <option value="all">All time</option>
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+    </select>
+
+    <button onclick="loadData()">↻ Refresh</button>
+    <span id="status">Loading...</span>
+</div>
+
+<div class="cards">
+
+    <div class="card">
+        <div class="label">Total detections</div>
+        <div class="metric" id="total">0</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Species identified</div>
+        <div class="metric" id="speciesCount">0</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Images analyzed</div>
+        <div class="metric" id="images">0</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Avg confidence</div>
+        <div class="metric" id="confidence">0%</div>
+    </div>
+
+</div>
+
+<div class="layout">
+
+<section class="panel">
+    <h2>📊 Species Statistics</h2>
+    <canvas id="chart" class="chart"></canvas>
+    <div id="speciesStats" class="species-list"></div>
+</section>
+
+<section class="panel">
+    <h2>📍 Wildlife Sightings Map</h2>
+    <div id="map"></div>
+    <p id="mapNote">GPS coordinates required for sightings.</p>
+</section>
+
+<section class="panel wide">
+    <h2>📷 Recent Detections</h2>
+    <div id="gallery" class="gallery"></div>
+</section>
+
+<section class="panel wide">
+    <h2>🕒 Detection History</h2>
+
+    <div style="overflow:auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Species</th>
+                    <th>Confidence</th>
+                </tr>
+            </thead>
+
+            <tbody id="history"></tbody>
+        </table>
+    </div>
+</section>
+
+</div>
+
+</main>
+
+<footer>
+    Wildlife Monitor · Powered by Google SpeciesNet
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+let allRecords = [];
+let map;
+let markers;
+
+// ========================================
+// SPECIES CLASSIFICATION
+// ========================================
+
+
+function speciesName(d) {
+
+    const processed = d.processed_classification;
+
+    // Only use processed classifications if they contain
+    // an actual species prediction.
+    if (processed && typeof processed === "object") {
+        if (processed.common_name) return processed.common_name;
+        if (processed.species) return processed.species;
+    }
+
+    // Read SpeciesNet's raw classification candidates
+    const raw = d.raw_classifications;
+
+    if (raw && raw.classes && raw.classes.length > 0) {
+
+        const classes = raw.classes;
+        const scores = raw.scores || [];
+
+        // Find the candidate with the highest score
+        let bestIndex = 0;
+
+        for (let i = 1; i < scores.length; i++) {
+            if (scores[i] > scores[bestIndex]) {
+                bestIndex = i;
+            }
+        }
+
+        const taxonomy = classes[bestIndex].split(";");
+
+        const name = taxonomy[taxonomy.length - 1].trim();
+
+        const score = scores[bestIndex] || 0;
+
+        // Mark uncertain classifications
+        if (score < 0.50) {
+            return name + " (uncertain)";
+        }
+
+        return name;
+    }
+
+    return "Species unavailable";
+}
+
+
+function getConfidence(d) {
+
+    return Number(
+        d.conf ||
+        d.confidence ||
+        d.processed_classification?.confidence ||
+        0
+    );
+}
+
+// ========================================
+// DATA PROCESSING
+// ========================================
+
+function flatten(data) {
+
+    let records = [];
+
+    for (const p of data.predictions || []) {
+
+        for (const d of p.detections || []) {
+
+            records.push({
+
+                species: speciesName(d),
+
+                confidence: getConfidence(d),
+
+                image: p.filepath || "",
+
+                date: p.processed_at || p.timestamp || p.date || "",
+
+                latitude:
+                    d.latitude ?? d.lat ??
+                    p.latitude ?? p.lat,
+
+                longitude:
+                    d.longitude ?? d.lon ??
+                    p.longitude ?? p.lon
+
+            });
+        }
+    }
+
+    return records;
+}
+
+// ========================================
+// SEARCH AND FILTER
+// ========================================
+
+function filteredRecords() {
+
+    const search =
+        document.getElementById("search")
+        .value.toLowerCase();
+
+    const period =
+        document.getElementById("period").value;
+
+    return allRecords.filter(r => {
+
+        const matches =
+            r.species.toLowerCase().includes(search);
+
+        let dateMatches = true;
+
+        if (period !== "all" && r.date) {
+
+            dateMatches =
+                Date.now() -
+                new Date(r.date).getTime()
+                <= Number(period) * 86400000;
+        }
+
+        return matches && dateMatches;
+    });
+}
+
+// ========================================
+// RENDER WEBSITE
+// ========================================
+
+function render() {
+
+    const records = filteredRecords();
+
+    const species = {};
+
+    records.forEach(r => {
+
+        species[r.species] =
+            (species[r.species] || 0) + 1;
+
+    });
+
+    // Statistics
+
+    document.getElementById("total")
+        .textContent = records.length;
+
+    document.getElementById("speciesCount")
+        .textContent = Object.keys(species).length;
+
+    document.getElementById("images")
+        .textContent =
+        new Set(records.map(r => r.image)).size;
+
+    const avg = records.length
+        ? records.reduce((s,r) => s+r.confidence,0)
+          / records.length
+        : 0;
+
+    document.getElementById("confidence")
+        .textContent = (avg * 100).toFixed(1) + "%";
+
+    // Species statistics
+
+    const stats =
+        document.getElementById("speciesStats");
+
+    const maxCount =
+        Math.max(1, ...Object.values(species));
+
+    stats.innerHTML =
+        Object.entries(species)
+        .sort((a,b) => b[1]-a[1])
+        .map(([name,count]) => `
+            <div class="species-row">
+
+                <span>${escapeHTML(name)}</span>
+
+                <b>${count}</b>
+
+                <div class="bar">
+                    <span style="width:${count/maxCount*100}%"></span>
+                </div>
+
+            </div>
+        `).join("");
+
+    drawChart(species);
+
+    // Recent animal photos
+
+    document.getElementById("gallery").innerHTML =
+        records.slice().reverse().slice(0,20)
+        .map(r => `
+            <div class="animal">
+
+                <img
+                    src="${escapeHTML(imageURL(r.image))}"
+                    alt="${escapeHTML(r.species)}"
+                    onerror="this.style.display='none'"
+                >
+
+                <div class="info">
+
+                    <h3>${escapeHTML(r.species)}</h3>
+
+                    <small>
+                        ${(r.confidence*100).toFixed(1)}%
+                        confidence
+                    </small>
+
+                </div>
+
+            </div>
+        `).join("");
+
+    // Detection history WITHOUT filenames
+
+    document.getElementById("history").innerHTML =
+        records.slice().reverse().map(r => `
+            <tr>
+
+                <td>${escapeHTML(formatDate(r.date))}</td>
+
+                <td>${escapeHTML(r.species)}</td>
+
+                <td>${(r.confidence*100).toFixed(1)}%</td>
+
+            </tr>
+        `).join("");
+
+    // Map
+
+    markers.clearLayers();
+
+    let count = 0;
+
+    records.forEach(r => {
+
+        if (r.latitude != null &&
+            r.longitude != null) {
+
+            L.marker([
+                r.latitude,
+                r.longitude
+            ])
+            .addTo(markers)
+            .bindPopup(`
+                <b>${escapeHTML(r.species)}</b><br>
+                ${escapeHTML(formatDate(r.date))}
+            `);
+
+            count++;
+        }
+    });
+
+    document.getElementById("mapNote")
+        .textContent = count
+        ? count + " sightings mapped"
+        : "No GPS coordinates found in predictions.json";
+
+}
+
+// ========================================
+// CHART
+// ========================================
+
+function drawChart(species) {
+
+    const canvas =
+        document.getElementById("chart");
+
+    const ctx = canvas.getContext("2d");
+
+    const width = canvas.clientWidth || 400;
+    const height = 280;
+
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+
+    ctx.scale(2,2);
+
+    ctx.clearRect(0,0,width,height);
+
+    const entries =
+        Object.entries(species)
+        .sort((a,b) => b[1]-a[1])
+        .slice(0,8);
+
+    if (!entries.length) {
+        ctx.fillStyle = "#a8b8af";
+        ctx.fillText("No detections yet",10,30);
+        return;
+    }
+
+    const max =
+        Math.max(...entries.map(e => e[1]));
+
+    entries.forEach((entry,i) => {
+
+        const y = 20 + i * 30;
+
+        ctx.fillStyle = "#a8b8af";
+        ctx.font = "12px Arial";
+
+        ctx.fillText(
+            entry[0].slice(0,18),
+            0,
+            y+12
+        );
+
+        ctx.fillStyle = "#55d88a";
+
+        const barWidth =
+            (width-160) * entry[1]/max;
+
+        ctx.fillRect(
+            140,
+            y,
+            barWidth,
+            18
+        );
+
+        ctx.fillStyle = "#ffffff";
+
+        ctx.fillText(
+            entry[1],
+            145+barWidth,
+            y+12
+        );
+
+    });
+
+}
+
+// ========================================
+// HELPERS
+// ========================================
+
+function escapeHTML(value) {
+
+    return String(value ?? "")
+        .replace(/[&<>"']/g, c => ({
+            "&":"&amp;",
+            "<":"&lt;",
+            ">":"&gt;",
+            '"':"&quot;",
+            "'":"&#39;"
+        }[c]));
+
+}
+
+
+
+function formatDate(value) {
+
+    if (!value) return "Unknown time";
+
+    const d = new Date(value);
+
+    if (isNaN(d.getTime())) return "Unknown time";
+
+    return d.toLocaleString();
+}
+
+
+
+function imageURL(path) {
+
+    if (!path) return "";
+
+    return path.replaceAll("\\","/")
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/");
+
+}
+
+// ========================================
+// LOAD SPECIESNET DATA
+// ========================================
+
+async function loadData() {
+
+    try {
+
+        const response =
+            await fetch("predictions.json?time=" + Date.now());
+
+        if (!response.ok)
+            throw new Error("Could not load predictions.json");
+
+        const data = await response.json();
+
+        allRecords = flatten(data);
+
+        document.getElementById("status")
+            .textContent =
+            "Updated " +
+            new Date().toLocaleTimeString();
+
+        render();
+
+    } catch(error) {
+
+        document.getElementById("status")
+            .textContent = "Error loading data";
+
+        console.error(error);
+
+    }
+
+}
+
+// ========================================
+// INITIALIZE MAP
+// ========================================
+
+map = L.map("map").setView([42.03,-88.08],10);
+
+L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+        attribution: "© OpenStreetMap"
+    }
+).addTo(map);
+
+markers = L.layerGroup().addTo(map);
+
+// ========================================
+// EVENTS
+// ========================================
+
+document.getElementById("search")
+    .addEventListener("input",render);
+
+document.getElementById("period")
+    .addEventListener("change",render);
+
+window.addEventListener("resize", () => {
+    drawChart(
+        Object.fromEntries(
+            filteredRecords().map(r => [r.species,1])
+        )
+    );
+});
+
+// ========================================
+// START
+// ========================================
+
+loadData();
+
+setInterval(loadData,30000);
+
+</script>
+
+</body>
+</html>
